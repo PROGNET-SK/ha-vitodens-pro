@@ -572,13 +572,9 @@ class HaVitodensProEditor extends HTMLElement {
 
   switchGroup(group) {
     this.activeGroup = group;
-    if (this.shadowRoot) {
-      this.shadowRoot.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
-      this.shadowRoot.querySelector(`.tab[data-group="${group}"]`)?.classList.add("active");
-
-      this.shadowRoot.querySelectorAll(".tab-content").forEach(tc => tc.classList.remove("active"));
-      this.shadowRoot.querySelector(`.tab-content[data-content="${group}"]`)?.classList.add("active");
-    }
+    // Re-render completely so the active group elements are added fresh to DOM
+    // This prevents ha-entity-picker from dying in hidden background states
+    this.render();
   }
 
   render() {
@@ -602,31 +598,28 @@ class HaVitodensProEditor extends HTMLElement {
 
     const tabsHtml = `
       <div class="tabs">
-        <button class="tab ${this.activeGroup === 'main' ? 'active' : ''}" data-group="main">Hlavný kotol</button>
+        <button class="tab ${this.activeGroup === 'main' ? 'active' : ''}" data-group="main">Hlavný</button>
         <button class="tab ${this.activeGroup === 'sensors' ? 'active' : ''}" data-group="sensors">Čidlá</button>
         <button class="tab ${this.activeGroup === 'controls' ? 'active' : ''}" data-group="controls">Ovládanie</button>
-        <button class="tab ${this.activeGroup === 'diag' ? 'active' : ''}" data-group="diag">Diagnostika</button>
-        <button class="tab ${this.activeGroup === 'circuits' ? 'active' : ''}" data-group="circuits">Okruhy (5)</button>
-        <button class="tab ${this.activeGroup === 'rads' ? 'active' : ''}" data-group="rads">Radiátory (5)</button>
+        <button class="tab ${this.activeGroup === 'diag' ? 'active' : ''}" data-group="diag">Diag.</button>
+        <button class="tab ${this.activeGroup === 'circuits' ? 'active' : ''}" data-group="circuits">Okruhy(5)</button>
+        <button class="tab ${this.activeGroup === 'rads' ? 'active' : ''}" data-group="rads">Radiátory(5)</button>
       </div>
     `;
 
-    // Render ALL sections but use CSS to handle visibility without display: none!
-    const allContentHtml = `
-      <div class="tab-content ${this.activeGroup === 'main' ? 'active' : ''}" data-content="main">
-        <div class="group"><h3>Hlavný kotol</h3>${generatePicker("Stav kotla (Entity)", "boiler_state")}</div>
-      </div>
-      <div class="tab-content ${this.activeGroup === 'sensors' ? 'active' : ''}" data-content="sensors">
-        <div class="group"><h3>Čidlá (Energia, teploty, spotreba)</h3>${SENSORS.map(s => generatePicker(s.name, s.id)).join('')}</div>
-      </div>
-      <div class="tab-content ${this.activeGroup === 'controls' ? 'active' : ''}" data-content="controls">
-        <div class="group"><h3>Ovládanie a nastavenia</h3>${CONTROLS.map(c => generatePicker(c.name, c.id)).join('')}</div>
-      </div>
-      <div class="tab-content ${this.activeGroup === 'diag' ? 'active' : ''}" data-content="diag">
-        <div class="group"><h3>Diagnostika</h3>${DIAGNOSTICS.map(d => generatePicker(d.name, d.id)).join('')}</div>
-      </div>
-      <div class="tab-content ${this.activeGroup === 'circuits' ? 'active' : ''}" data-content="circuits">
-        <div class="group"><h3>Okruhy (Max 5)</h3>${[1, 2, 3, 4, 5].map(i => `
+    // Only generate the HTML for the currently active tab
+    let activeContentHtml = '';
+
+    if (this.activeGroup === 'main') {
+      activeContentHtml = `<div class="group"><h3>Hlavný kotol</h3>${generatePicker("Stav kotla (Entity)", "boiler_state")}</div>`;
+    } else if (this.activeGroup === 'sensors') {
+      activeContentHtml = `<div class="group"><h3>Čidlá (Energia, teploty, spotreba)</h3>${SENSORS.map(s => generatePicker(s.name, s.id)).join('')}</div>`;
+    } else if (this.activeGroup === 'controls') {
+      activeContentHtml = `<div class="group"><h3>Ovládanie a nastavenia</h3>${CONTROLS.map(c => generatePicker(c.name, c.id)).join('')}</div>`;
+    } else if (this.activeGroup === 'diag') {
+      activeContentHtml = `<div class="group"><h3>Diagnostika</h3>${DIAGNOSTICS.map(d => generatePicker(d.name, d.id)).join('')}</div>`;
+    } else if (this.activeGroup === 'circuits') {
+      activeContentHtml = `<div class="group"><h3>Okruhy (Max 5)</h3>${[1, 2, 3, 4, 5].map(i => `
             <div style="border-bottom:1px solid #555; margin-bottom:10px; padding-bottom:5px;">
                 <h4>Okruh ${i}</h4>
                 <div class="row">Typ: 
@@ -639,12 +632,10 @@ class HaVitodensProEditor extends HTMLElement {
                 ${generatePicker(`Aktuálna teplota Okruh ${i}`, `circuit_${i}_temp`)}
                 ${generatePicker(`Žiadaná teplota Okruh ${i}`, `circuit_${i}_target`)}
             </div>
-        `).join('')}</div>
-      </div>
-      <div class="tab-content ${this.activeGroup === 'rads' ? 'active' : ''}" data-content="rads">
-        <div class="group"><h3>Radiátory samostatne (Max 5)</h3>${[1, 2, 3, 4, 5].map(i => generatePicker(`Teplota Radiátor ${i}`, `radiator_${i}_temp`)).join('')}</div>
-      </div>
-    `;
+        `).join('')}</div>`;
+    } else if (this.activeGroup === 'rads') {
+      activeContentHtml = `<div class="group"><h3>Radiátory samostatne (Max 5)</h3>${[1, 2, 3, 4, 5].map(i => generatePicker(`Teplota Radiátor ${i}`, `radiator_${i}_temp`)).join('')}</div>`;
+    }
 
     const template = `
             <style>
@@ -655,17 +646,16 @@ class HaVitodensProEditor extends HTMLElement {
                 .tabs { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 15px; }
                 .tab { background: #333; color: #ccc; border: 1px solid #555; padding: 8px 12px; border-radius: 4px; cursor: pointer; transition: 0.2s; font-family: sans-serif; font-size: 14px;}
                 .tab:hover { background: #444; color: #fff; }
-                .tab.active { background: var(--primary-color, #03a9f4); color: white; border-color: var(--primary-color, #03a9f4); font-weight: bold; }
-                
-                .tab-content { visibility: hidden; height: 0; overflow: hidden; opacity: 0; pointer-events: none; }
-                .tab-content.active { visibility: visible; height: auto; overflow: visible; opacity: 1; pointer-events: auto; }
+                .tab.active { background: var(--boiler-on, #00ffd5); color: #000; border-color: var(--boiler-on, #00ffd5); font-weight: bold; }
 
                 .group { border: 1px solid #444; padding: 15px; border-radius: 5px; color: white; background: rgba(0,0,0,0.2); }
                 .group h3 { margin-top: 0; margin-bottom: 15px; border-bottom: 1px solid #555; padding-bottom: 5px; font-family: sans-serif;}
                 select { background: #333; color: white; padding: 5px; border-radius: 4px; border: 1px solid #555; }
             </style>
             ${tabsHtml}
-            ${allContentHtml}
+            <div class="active-content-container">
+                ${activeContentHtml}
+            </div>
         `;
 
     this.shadowRoot.innerHTML = template;

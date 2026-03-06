@@ -527,7 +527,6 @@ class HaVitodensProEditor extends HTMLElement {
     this.attachShadow({ mode: "open" });
     this.activeGroup = "main";
     this.rendered = false;
-    this.datalistCreated = false;
   }
 
   setConfig(config) {
@@ -544,12 +543,10 @@ class HaVitodensProEditor extends HTMLElement {
 
   set hass(hass) {
     this._hass = hass;
-    if (this.shadowRoot && !this.datalistCreated) {
-      const dl = this.shadowRoot.querySelector('#entities-list');
-      if (dl && hass.states) {
-        dl.innerHTML = Object.keys(hass.states).sort().map(e => `<option value="${e}">`).join('');
-        this.datalistCreated = true;
-      }
+    if (this.shadowRoot) {
+      this.shadowRoot.querySelectorAll("ha-entity-picker").forEach(el => {
+        el.hass = hass;
+      });
     }
   }
 
@@ -560,7 +557,7 @@ class HaVitodensProEditor extends HTMLElement {
   configChanged(ev) {
     if (!this._config) return;
     const target = ev.target;
-    const configVal = target.getAttribute("configValue") || target.configValue;
+    const configVal = target.getAttribute("configValue") || target.configValue || target.dataset.configValue;
     if (configVal) {
       this._config = { ...this._config, [configVal]: target.value };
       window.dispatchEvent(
@@ -587,12 +584,11 @@ class HaVitodensProEditor extends HTMLElement {
   render() {
     if (!this.shadowRoot) return;
 
-    // Use native input with datalist for guaranteed rendering instead of buggy ha-entity-picker
-    const generatePicker = (label, id) => `
+    // Use placeholders for pickers to prevent Vaadin innerHTML lifecycle rendering bugs
+    const generatePickerPlaceholder = (label, id) => `
             <div class="row">
-                <div class="input-container">
-                    <label>${label}</label>
-                    <input type="text" configValue="${id}" list="entities-list" placeholder="Vyhľadať Entitu (Item ID)..." class="ha-native-input" />
+                <div class="input-container picker-placeholder" data-id="${id}" data-label="${label}">
+                    <!-- ha-entity-picker injected here during mountPickers() -->
                 </div>
                 <div class="label-input">
                     <ha-textfield
@@ -615,19 +611,17 @@ class HaVitodensProEditor extends HTMLElement {
     `;
 
     const allContentHtml = `
-      <datalist id="entities-list"></datalist>
-
       <div class="tab-content ${this.activeGroup === 'main' ? 'active' : ''}" data-content="main">
-        <div class="group"><h3>Hlavný kotol</h3>${generatePicker("Stav kotla (Entity)", "boiler_state")}</div>
+        <div class="group"><h3>Hlavný kotol</h3>${generatePickerPlaceholder("Stav kotla (Entity)", "boiler_state")}</div>
       </div>
       <div class="tab-content ${this.activeGroup === 'sensors' ? 'active' : ''}" data-content="sensors">
-        <div class="group"><h3>Čidlá (Energia, teploty, spotreba)</h3>${SENSORS.map(s => generatePicker(s.name, s.id)).join('')}</div>
+        <div class="group"><h3>Čidlá (Energia, teploty, spotreba)</h3>${SENSORS.map(s => generatePickerPlaceholder(s.name, s.id)).join('')}</div>
       </div>
       <div class="tab-content ${this.activeGroup === 'controls' ? 'active' : ''}" data-content="controls">
-        <div class="group"><h3>Ovládanie a nastavenia</h3>${CONTROLS.map(c => generatePicker(c.name, c.id)).join('')}</div>
+        <div class="group"><h3>Ovládanie a nastavenia</h3>${CONTROLS.map(c => generatePickerPlaceholder(c.name, c.id)).join('')}</div>
       </div>
       <div class="tab-content ${this.activeGroup === 'diag' ? 'active' : ''}" data-content="diag">
-        <div class="group"><h3>Diagnostika</h3>${DIAGNOSTICS.map(d => generatePicker(d.name, d.id)).join('')}</div>
+        <div class="group"><h3>Diagnostika</h3>${DIAGNOSTICS.map(d => generatePickerPlaceholder(d.name, d.id)).join('')}</div>
       </div>
       <div class="tab-content ${this.activeGroup === 'circuits' ? 'active' : ''}" data-content="circuits">
         <div class="group"><h3>Okruhy (Max 5)</h3>${[1, 2, 3, 4, 5].map(i => `
@@ -643,24 +637,26 @@ class HaVitodensProEditor extends HTMLElement {
                         </select>
                     </div>
                 </div>
-                ${generatePicker(`Aktuálna teplota Okruh ${i}`, `circuit_${i}_temp`)}
-                ${generatePicker(`Žiadaná teplota Okruh ${i}`, `circuit_${i}_target`)}
+                ${generatePickerPlaceholder(`Aktuálna teplota Okruh ${i}`, `circuit_${i}_temp`)}
+                ${generatePickerPlaceholder(`Žiadaná teplota Okruh ${i}`, `circuit_${i}_target`)}
             </div>
         `).join('')}</div>
       </div>
       <div class="tab-content ${this.activeGroup === 'rads' ? 'active' : ''}" data-content="rads">
-        <div class="group"><h3>Radiátory samostatne (Max 5)</h3>${[1, 2, 3, 4, 5].map(i => generatePicker(`Teplota Radiátor ${i}`, `radiator_${i}_temp`)).join('')}</div>
+        <div class="group"><h3>Radiátory samostatne (Max 5)</h3>${[1, 2, 3, 4, 5].map(i => generatePickerPlaceholder(`Teplota Radiátor ${i}`, `radiator_${i}_temp`)).join('')}</div>
       </div>
     `;
 
     const template = `
             <style>
                 .row { display: flex; align-items: flex-end; gap: 10px; margin-bottom: 12px; }
-                .input-container { flex: 2; display: flex; flex-direction: column; }
+                .input-container { flex: 2; display: flex; flex-direction: column; width: 100%; }
                 .input-container label { font-size: 12px; color: #aaa; margin-bottom: 4px; font-family: sans-serif; }
                 .label-input { flex: 1; }
                 
-                /* Native select / input styling */
+                ha-entity-picker { width: 100%; display: block; }
+                
+                /* Native select styling */
                 .ha-native-input {
                     background: #2b2b2b;
                     border: 1px solid #555;
@@ -694,16 +690,7 @@ class HaVitodensProEditor extends HTMLElement {
 
     this.shadowRoot.innerHTML = template;
 
-    // Trigger datalist population if hass is already available
-    if (this._hass && !this.datalistCreated) {
-      const dl = this.shadowRoot.querySelector('#entities-list');
-      if (dl && this._hass.states) {
-        dl.innerHTML = Object.keys(this._hass.states).sort().map(e => `<option value="${e}">`).join('');
-        this.datalistCreated = true;
-      }
-    }
-
-    // Attach Tab listeners
+    // Attach native elements cleanly
     this.shadowRoot.querySelectorAll(".tab").forEach(tab => {
       tab.addEventListener("click", (e) => {
         e.preventDefault();
@@ -711,8 +698,7 @@ class HaVitodensProEditor extends HTMLElement {
       });
     });
 
-    // Attach Event Listeners to inputs cleanly
-    this.shadowRoot.querySelectorAll("input.ha-native-input, select.ha-native-input, ha-textfield").forEach(el => {
+    this.shadowRoot.querySelectorAll("select.ha-native-input, ha-textfield").forEach(el => {
       const configVal = el.getAttribute("configValue");
       if (el.tagName === 'HA-TEXTFIELD') {
         el.value = this._config[configVal] || "";
@@ -720,16 +706,42 @@ class HaVitodensProEditor extends HTMLElement {
       } else {
         el.value = this._config[configVal] || "";
         el.addEventListener('change', (ev) => this.configChanged(ev));
-        el.addEventListener('input', (ev) => this.configChanged(ev)); // for quick search bindings
       }
     });
 
+    // Mount ha-entity-pickers programmatically
+    this.mountPickers();
+  }
+
+  mountPickers() {
+    this.shadowRoot.querySelectorAll(".picker-placeholder").forEach(container => {
+      const id = container.getAttribute("data-id");
+      const label = container.getAttribute("data-label");
+
+      if (!id) return;
+
+      container.innerHTML = ''; // clear out placeholder
+
+      const picker = document.createElement("ha-entity-picker");
+      picker.setAttribute("configValue", id);
+      picker.dataset.configValue = id; // safe fallback
+      picker.configValue = id;
+      picker.label = label;
+      picker.allowCustomEntity = true;
+
+      if (this.hass) picker.hass = this.hass;   // assign hass right away
+      picker.value = this._config[id] || "";    // default value
+
+      picker.addEventListener("value-changed", (ev) => this.configChanged(ev));
+
+      container.appendChild(picker);
+    });
   }
 
   updateValues() {
     if (!this.shadowRoot) return;
-    this.shadowRoot.querySelectorAll("input.ha-native-input, select.ha-native-input, ha-textfield").forEach(el => {
-      const configVal = el.getAttribute("configValue");
+    this.shadowRoot.querySelectorAll("ha-entity-picker, select.ha-native-input, ha-textfield").forEach(el => {
+      const configVal = el.getAttribute("configValue") || el.dataset?.configValue;
       if (configVal) {
         if (el.value !== (this._config[configVal] || "")) {
           el.value = this._config[configVal] || "";

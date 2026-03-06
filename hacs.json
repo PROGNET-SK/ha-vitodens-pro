@@ -1,8 +1,0 @@
-{
-    "name": "HA Vitodens Pro",
-    "render_readme": true,
-    "filename": "ha-vitodens-pro.js",
-    "content_in_root": true,
-    "homeassistant": "2023.12.0",
-    "category": "plugin"
-}

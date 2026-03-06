@@ -555,9 +555,10 @@ class HaVitodensProEditor extends HTMLElement {
   }
 
   configChanged(ev) {
-    if (!this._config) return;
+    if (!this._config || !this.hass) return;
     const target = ev.target;
-    const configVal = target.getAttribute("configValue") || target.configValue || target.dataset.configValue;
+    // For ha-entity-picker
+    const configVal = target.getAttribute("configValue") || target.configValue;
     if (configVal) {
       this._config = { ...this._config, [configVal]: target.value };
       window.dispatchEvent(
@@ -572,24 +573,20 @@ class HaVitodensProEditor extends HTMLElement {
 
   switchGroup(group) {
     this.activeGroup = group;
-    if (this.shadowRoot) {
-      this.shadowRoot.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
-      this.shadowRoot.querySelector(`.tab[data-group="${group}"]`)?.classList.add("active");
-
-      this.shadowRoot.querySelectorAll(".tab-content").forEach(tc => tc.classList.remove("active"));
-      this.shadowRoot.querySelector(`.tab-content[data-content="${group}"]`)?.classList.add("active");
-    }
+    // Re-render completely so the active group elements are added fresh to DOM
+    this.render();
   }
 
   render() {
     if (!this.shadowRoot) return;
 
-    // Use placeholders for pickers to prevent Vaadin innerHTML lifecycle rendering bugs
-    const generatePickerPlaceholder = (label, id) => `
+    const generatePicker = (label, id) => `
             <div class="row">
-                <div class="input-container picker-placeholder" data-id="${id}" data-label="${label}">
-                    <!-- ha-entity-picker injected here during mountPickers() -->
-                </div>
+                <ha-entity-picker
+                    configValue="${id}"
+                    label="${label}"
+                    allow-custom-entity
+                ></ha-entity-picker>
                 <div class="label-input">
                     <ha-textfield
                         label="Vlastný názov (voliteľné)"
@@ -601,96 +598,69 @@ class HaVitodensProEditor extends HTMLElement {
 
     const tabsHtml = `
       <div class="tabs">
-        <button class="tab ${this.activeGroup === 'main' ? 'active' : ''}" data-group="main">Hlavný</button>
+        <button class="tab ${this.activeGroup === 'main' ? 'active' : ''}" data-group="main">Hlavný kotol</button>
         <button class="tab ${this.activeGroup === 'sensors' ? 'active' : ''}" data-group="sensors">Čidlá</button>
         <button class="tab ${this.activeGroup === 'controls' ? 'active' : ''}" data-group="controls">Ovládanie</button>
         <button class="tab ${this.activeGroup === 'diag' ? 'active' : ''}" data-group="diag">Diagnostika</button>
-        <button class="tab ${this.activeGroup === 'circuits' ? 'active' : ''}" data-group="circuits">Okruhy (5)</button>
-        <button class="tab ${this.activeGroup === 'rads' ? 'active' : ''}" data-group="rads">Radiátory (5)</button>
+        <button class="tab ${this.activeGroup === 'circuits' ? 'active' : ''}" data-group="circuits">Okruhy(5)</button>
+        <button class="tab ${this.activeGroup === 'rads' ? 'active' : ''}" data-group="rads">Radiátory(5)</button>
       </div>
     `;
 
-    const allContentHtml = `
-      <div class="tab-content ${this.activeGroup === 'main' ? 'active' : ''}" data-content="main">
-        <div class="group"><h3>Hlavný kotol</h3>${generatePickerPlaceholder("Stav kotla (Entity)", "boiler_state")}</div>
-      </div>
-      <div class="tab-content ${this.activeGroup === 'sensors' ? 'active' : ''}" data-content="sensors">
-        <div class="group"><h3>Čidlá (Energia, teploty, spotreba)</h3>${SENSORS.map(s => generatePickerPlaceholder(s.name, s.id)).join('')}</div>
-      </div>
-      <div class="tab-content ${this.activeGroup === 'controls' ? 'active' : ''}" data-content="controls">
-        <div class="group"><h3>Ovládanie a nastavenia</h3>${CONTROLS.map(c => generatePickerPlaceholder(c.name, c.id)).join('')}</div>
-      </div>
-      <div class="tab-content ${this.activeGroup === 'diag' ? 'active' : ''}" data-content="diag">
-        <div class="group"><h3>Diagnostika</h3>${DIAGNOSTICS.map(d => generatePickerPlaceholder(d.name, d.id)).join('')}</div>
-      </div>
-      <div class="tab-content ${this.activeGroup === 'circuits' ? 'active' : ''}" data-content="circuits">
-        <div class="group"><h3>Okruhy (Max 5)</h3>${[1, 2, 3, 4, 5].map(i => `
-            <div style="border-bottom:1px solid #555; margin-bottom:10px; padding-bottom:10px;">
-                <h4 style="margin: 0 0 10px 0;">Okruh ${i}</h4>
-                <div class="row">
-                    <div class="input-container">
-                        <label>Typ okruhu:</label>
-                        <select configValue="circuit_${i}_type" class="ha-native-input">
-                            <option value="podlaha">Podlaha</option>
-                            <option value="radiatory">Radiátory</option>
-                            <option value="stropne">Stropné (Kúrenie/Chladenie)</option>
-                        </select>
-                    </div>
+    // Only generate the HTML for the currently active tab TO GUARANTEE DOM MOUNT
+    let activeContentHtml = '';
+
+    if (this.activeGroup === 'main') {
+      activeContentHtml = `<div class="group"><h3>Hlavný kotol</h3>${generatePicker("Stav kotla (Entity)", "boiler_state")}</div>`;
+    } else if (this.activeGroup === 'sensors') {
+      activeContentHtml = `<div class="group"><h3>Čidlá (Energia, teploty, spotreba)</h3>${SENSORS.map(s => generatePicker(s.name, s.id)).join('')}</div>`;
+    } else if (this.activeGroup === 'controls') {
+      activeContentHtml = `<div class="group"><h3>Ovládanie a nastavenia</h3>${CONTROLS.map(c => generatePicker(c.name, c.id)).join('')}</div>`;
+    } else if (this.activeGroup === 'diag') {
+      activeContentHtml = `<div class="group"><h3>Diagnostika</h3>${DIAGNOSTICS.map(d => generatePicker(d.name, d.id)).join('')}</div>`;
+    } else if (this.activeGroup === 'circuits') {
+      activeContentHtml = `<div class="group"><h3>Okruhy (Max 5)</h3>${[1, 2, 3, 4, 5].map(i => `
+            <div style="border-bottom:1px solid #555; margin-bottom:10px; padding-bottom:5px;">
+                <h4>Okruh ${i}</h4>
+                <div class="row">Typ: 
+                    <select configValue="circuit_${i}_type">
+                        <option value="podlaha">Podlaha</option>
+                        <option value="radiatory">Radiátory</option>
+                        <option value="stropne">Stropné (Kúrenie/Chladenie)</option>
+                    </select>
                 </div>
-                ${generatePickerPlaceholder(`Aktuálna teplota Okruh ${i}`, `circuit_${i}_temp`)}
-                ${generatePickerPlaceholder(`Žiadaná teplota Okruh ${i}`, `circuit_${i}_target`)}
+                ${generatePicker(`Aktuálna teplota Okruh ${i}`, `circuit_${i}_temp`)}
+                ${generatePicker(`Žiadaná teplota Okruh ${i}`, `circuit_${i}_target`)}
             </div>
-        `).join('')}</div>
-      </div>
-      <div class="tab-content ${this.activeGroup === 'rads' ? 'active' : ''}" data-content="rads">
-        <div class="group"><h3>Radiátory samostatne (Max 5)</h3>${[1, 2, 3, 4, 5].map(i => generatePickerPlaceholder(`Teplota Radiátor ${i}`, `radiator_${i}_temp`)).join('')}</div>
-      </div>
-    `;
+        `).join('')}</div>`;
+    } else if (this.activeGroup === 'rads') {
+      activeContentHtml = `<div class="group"><h3>Radiátory samostatne (Max 5)</h3>${[1, 2, 3, 4, 5].map(i => generatePicker(`Teplota Radiátor ${i}`, `radiator_${i}_temp`)).join('')}</div>`;
+    }
 
     const template = `
             <style>
-                .row { display: flex; align-items: flex-end; gap: 10px; margin-bottom: 12px; }
-                .input-container { flex: 2; display: flex; flex-direction: column; width: 100%; }
-                .input-container label { font-size: 12px; color: #aaa; margin-bottom: 4px; font-family: sans-serif; }
+                .row { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
                 .label-input { flex: 1; }
-                
-                ha-entity-picker { width: 100%; display: block; }
-                
-                /* Native select styling */
-                .ha-native-input {
-                    background: #2b2b2b;
-                    border: 1px solid #555;
-                    color: #fff;
-                    padding: 9px;
-                    border-radius: 4px;
-                    font-size: 14px;
-                    width: 100%;
-                    box-sizing: border-box;
-                    font-family: Roboto, sans-serif;
-                }
-                .ha-native-input:focus {
-                    outline: none;
-                    border-color: #03a9f4;
-                }
+                ha-entity-picker { flex: 2; width: 100%; display: block; }
                 
                 .tabs { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 15px; }
                 .tab { background: #333; color: #ccc; border: 1px solid #555; padding: 8px 12px; border-radius: 4px; cursor: pointer; transition: 0.2s; font-family: sans-serif; font-size: 14px;}
                 .tab:hover { background: #444; color: #fff; }
                 .tab.active { background: var(--boiler-on, #00ffd5); color: #000; border-color: var(--boiler-on, #00ffd5); font-weight: bold; }
-
-                .tab-content { display: none; }
-                .tab-content.active { display: block; }
-
+                
                 .group { border: 1px solid #444; padding: 15px; border-radius: 5px; color: white; background: rgba(0,0,0,0.2); }
                 .group h3 { margin-top: 0; margin-bottom: 15px; border-bottom: 1px solid #555; padding-bottom: 5px; font-family: sans-serif;}
+                select { background: #333; color: white; padding: 5px; border-radius: 4px; border: 1px solid #555; }
             </style>
             ${tabsHtml}
-            ${allContentHtml}
+            <div class="active-content-container">
+                ${activeContentHtml}
+            </div>
         `;
 
     this.shadowRoot.innerHTML = template;
 
-    // Attach native elements cleanly
+    // Attach Tab listeners
     this.shadowRoot.querySelectorAll(".tab").forEach(tab => {
       tab.addEventListener("click", (e) => {
         e.preventDefault();
@@ -698,53 +668,38 @@ class HaVitodensProEditor extends HTMLElement {
       });
     });
 
-    this.shadowRoot.querySelectorAll("select.ha-native-input, ha-textfield").forEach(el => {
+    // Attach Event Listeners to inputs cleanly
+    this.shadowRoot.querySelectorAll("ha-entity-picker, ha-textfield, select").forEach(el => {
       const configVal = el.getAttribute("configValue");
-      if (el.tagName === 'HA-TEXTFIELD') {
+      if (el.tagName === 'HA-ENTITY-PICKER') {
+        el.hass = this.hass;
+        el.value = this._config[configVal] || "";
+        el.addEventListener('value-changed', (ev) => this.configChanged(ev));
+      } else if (el.tagName === 'HA-TEXTFIELD') {
         el.value = this._config[configVal] || "";
         el.addEventListener('input', (ev) => this.configChanged(ev));
-      } else {
-        el.value = this._config[configVal] || "";
+      } else if (el.tagName === 'SELECT') {
+        el.value = this._config[configVal] || "radiatory";
         el.addEventListener('change', (ev) => this.configChanged(ev));
       }
     });
 
-    // Mount ha-entity-pickers programmatically
-    this.mountPickers();
-  }
-
-  mountPickers() {
-    this.shadowRoot.querySelectorAll(".picker-placeholder").forEach(container => {
-      const id = container.getAttribute("data-id");
-      const label = container.getAttribute("data-label");
-
-      if (!id) return;
-
-      container.innerHTML = ''; // clear out placeholder
-
-      const picker = document.createElement("ha-entity-picker");
-      picker.setAttribute("configValue", id);
-      picker.dataset.configValue = id; // safe fallback
-      picker.configValue = id;
-      picker.label = label;
-      picker.allowCustomEntity = true;
-
-      if (this.hass) picker.hass = this.hass;   // assign hass right away
-      picker.value = this._config[id] || "";    // default value
-
-      picker.addEventListener("value-changed", (ev) => this.configChanged(ev));
-
-      container.appendChild(picker);
-    });
   }
 
   updateValues() {
     if (!this.shadowRoot) return;
-    this.shadowRoot.querySelectorAll("ha-entity-picker, select.ha-native-input, ha-textfield").forEach(el => {
-      const configVal = el.getAttribute("configValue") || el.dataset?.configValue;
+    this.shadowRoot.querySelectorAll("ha-entity-picker, ha-textfield, select").forEach(el => {
+      const configVal = el.getAttribute("configValue");
       if (configVal) {
-        if (el.value !== (this._config[configVal] || "")) {
-          el.value = this._config[configVal] || "";
+        if (el.tagName === 'HA-ENTITY-PICKER') {
+          el.hass = this.hass;
+          if (el.value !== this._config[configVal]) {
+            el.value = this._config[configVal] || "";
+          }
+        } else if (el.tagName === 'HA-TEXTFIELD' || el.tagName === 'SELECT') {
+          if (el.value !== (this._config[configVal] || "")) {
+            el.value = this._config[configVal] || "";
+          }
         }
       }
     });

@@ -73,14 +73,10 @@ class HaVitodensPro extends HTMLElement {
     loadGSAP().then(() => this.gsapLoaded = true);
   }
 
-  setConfig(config) {
+  set config(config) {
     if (!config) return;
     this._config = config;
     this.render();
-  }
-
-  getCardSize() {
-    return 3;
   }
 
   set hass(hass) {
@@ -110,13 +106,11 @@ class HaVitodensPro extends HTMLElement {
 
     // Modifikacia hodnot - prevzate z HA state
     const updateText = (className, entityId) => {
+      if (!entityId) return;
       let el = this.shadowRoot.querySelector(className);
-      if (!el) return;
-      if (entityId && this._hass.states[entityId] && this._hass.states[entityId].state !== "unavailable" && this._hass.states[entityId].state !== "unknown") {
+      if (el && this._hass.states[entityId]) {
         const s = this._hass.states[entityId];
         el.innerText = `${s.state} ${s.attributes.unit_of_measurement || ""}`;
-      } else {
-        el.innerText = "0";
       }
     };
 
@@ -199,7 +193,7 @@ class HaVitodensPro extends HTMLElement {
                  <div class="circuit-box targetable">
                     <div class="circuit-title">${getName(`circuit_${i}`, `Okruh ${i}`)} <small>(${this._config[`circuit_${i}_type`] || 'radiator'})</small></div>
                     <div class="circuit-temps">
-                        <span class="actual circuit-val-${i}">0</span> / <span class="target circuit-tgt-${i}">0</span>
+                        <span class="actual circuit-val-${i}">--</span> / <span class="target circuit-tgt-${i}">--</span>
                     </div>
                  </div>
                 `;
@@ -212,7 +206,7 @@ class HaVitodensPro extends HTMLElement {
                  <div class="circuit-box rad-color">
                     <div class="circuit-title rad">${getName(`radiator_${i}`, `Radiátor ${i}`)}</div>
                     <div class="circuit-temps">
-                        <span class="actual radiator-val-${i}">0</span>
+                        <span class="actual radiator-val-${i}">--</span>
                     </div>
                  </div>
                 `;
@@ -443,7 +437,7 @@ class HaVitodensPro extends HTMLElement {
                         ${SENSORS.map(s => `
                             <div class="data-row">
                                 <span class="data-lbl">${getName(s.id, s.name)}</span>
-                                <span class="data-val val-${s.id}">0</span>
+                                <span class="data-val val-${s.id}">--</span>
                             </div>
                         `).join('')}
                     </div>
@@ -454,7 +448,7 @@ class HaVitodensPro extends HTMLElement {
                         ${CONTROLS.map(c => `
                             <div class="data-row interactive" data-ctrl="${c.id}">
                                 <span class="data-lbl">${getName(c.id, c.name)}</span>
-                                <span class="data-val val-${c.id}">0</span>
+                                <span class="data-val val-${c.id}">--</span>
                             </div>
                         `).join('')}
                         
@@ -462,7 +456,7 @@ class HaVitodensPro extends HTMLElement {
                         ${DIAGNOSTICS.map(d => `
                             <div class="data-row">
                                 <span class="data-lbl">${getName(d.id, d.name)}</span>
-                                <span class="data-val val-${d.id}">0</span>
+                                <span class="data-val val-${d.id}">--</span>
                             </div>
                         `).join('')}
                     </div>
@@ -506,146 +500,143 @@ class HaVitodensPro extends HTMLElement {
 
     this.updateStateValues();
   }
-
-  static getConfigElement() {
-    return document.createElement("ha-vitodens-pro-editor");
-  }
-
-  static getStubConfig() {
-    return {
-      type: "custom:ha-vitodens-pro",
-    };
-  }
 }
 
 customElements.define("ha-vitodens-pro", HaVitodensPro);
 
 // Editor Card
-class HaVitodensProEditor extends LitElement {
-  static get properties() {
-    return {
-      hass: { type: Object },
-      _config: { type: Object },
-      _activeGroup: { type: String }
-    };
-  }
-
+class HaVitodensProEditor extends HTMLElement {
   constructor() {
     super();
-    this._activeGroup = "main";
+    this.attachShadow({ mode: "open" });
   }
 
   setConfig(config) {
     this._config = { ...config };
+    this.render();
+  }
+
+  get config() { return this._config; }
+
+  set hass(hass) {
+    this._hass = hass;
+    if (this.shadowRoot) {
+      this.shadowRoot.querySelectorAll("ha-entity-picker").forEach(el => {
+        el.hass = hass;
+      });
+    }
+  }
+
+  get hass() {
+    return this._hass;
   }
 
   configChanged(ev) {
     if (!this._config || !this.hass) return;
     const target = ev.target;
-    const configVal = target.configValue;
-
-    if (configVal && this._config[configVal] !== target.value) {
+    const configVal = target.getAttribute("configValue") || target.configValue;
+    if (configVal) {
       this._config = { ...this._config, [configVal]: target.value };
-
-      this.dispatchEvent(new CustomEvent("config-changed", {
-        detail: { config: this._config },
-        bubbles: true,
-        composed: true
-      }));
+      window.dispatchEvent(
+        new CustomEvent("config-changed", {
+          detail: { config: this._config },
+          bubbles: true,
+          composed: true
+        })
+      );
     }
-  }
-
-  switchGroup(group) {
-    this._activeGroup = group;
   }
 
   render() {
-    if (!this.hass || !this._config) {
-      return html``;
-    }
+    if (!this.shadowRoot) return;
 
-    const generatePicker = (label, id) => html`
-      <div class="row">
-        <ha-entity-picker
-          .hass=${this.hass}
-          .value=${this._config[id] || ""}
-          .configValue=${id}
-          .label=${label}
-          allow-custom-entity
-          @value-changed=${this.configChanged}
-        ></ha-entity-picker>
-        <div class="label-input">
-          <ha-textfield
-            .label=${"Vlastný názov (voliteľné)"}
-            .value=${this._config[`${id}_name`] || ""}
-            .configValue=${`${id}_name`}
-            @input=${this.configChanged}
-          ></ha-textfield>
-        </div>
-      </div>
-    `;
-
-    return html`
-      <div class="tabs">
-        <button class="tab ${this._activeGroup === 'main' ? 'active' : ''}" @click=${() => this.switchGroup('main')}>Hlavný kotol</button>
-        <button class="tab ${this._activeGroup === 'sensors' ? 'active' : ''}" @click=${() => this.switchGroup('sensors')}>Čidlá</button>
-        <button class="tab ${this._activeGroup === 'controls' ? 'active' : ''}" @click=${() => this.switchGroup('controls')}>Ovládanie</button>
-        <button class="tab ${this._activeGroup === 'diag' ? 'active' : ''}" @click=${() => this.switchGroup('diag')}>Diagnostika</button>
-        <button class="tab ${this._activeGroup === 'circuits' ? 'active' : ''}" @click=${() => this.switchGroup('circuits')}>Okruhy(5)</button>
-        <button class="tab ${this._activeGroup === 'rads' ? 'active' : ''}" @click=${() => this.switchGroup('rads')}>Radiátory(5)</button>
-      </div>
-
-      <div class="active-content-container">
-        ${this._activeGroup === 'main' ? html`
-          <div class="group"><h3>Hlavný kotol</h3>${generatePicker("Stav kotla (Entity)", "boiler_state")}</div>
-        ` : ''}
-        ${this._activeGroup === 'sensors' ? html`
-          <div class="group"><h3>Čidlá (Energia, teploty, spotreba)</h3>${SENSORS.map(s => generatePicker(s.name, s.id))}</div>
-        ` : ''}
-        ${this._activeGroup === 'controls' ? html`
-          <div class="group"><h3>Ovládanie a nastavenia</h3>${CONTROLS.map(c => generatePicker(c.name, c.id))}</div>
-        ` : ''}
-        ${this._activeGroup === 'diag' ? html`
-          <div class="group"><h3>Diagnostika</h3>${DIAGNOSTICS.map(d => generatePicker(d.name, d.id))}</div>
-        ` : ''}
-        ${this._activeGroup === 'circuits' ? html`
-          <div class="group"><h3>Okruhy (Max 5)</h3>${[1, 2, 3, 4, 5].map(i => html`
-            <div style="border-bottom:1px solid #555; margin-bottom:10px; padding-bottom:5px;">
-              <h4 style="margin: 0 0 10px 0;">Okruh ${i}</h4>
-              <div class="row">Typ: 
-                <select .value=${this._config[`circuit_${i}_type`] || "radiatory"} .configValue=${`circuit_${i}_type`} @change=${this.configChanged}>
-                  <option value="podlaha">Podlaha</option>
-                  <option value="radiatory">Radiátory</option>
-                  <option value="stropne">Stropné (Kúrenie/Chladenie)</option>
-                </select>
-              </div>
-              ${generatePicker(`Aktuálna teplota Okruh ${i}`, `circuit_${i}_temp`)}
-              ${generatePicker(`Žiadaná teplota Okruh ${i}`, `circuit_${i}_target`)}
+    const generatePicker = (label, id) => `
+            <div class="row">
+                <ha-entity-picker
+                    configValue="${id}"
+                    label="${label}"
+                    allow-custom-entity
+                ></ha-entity-picker>
+                <div class="label-input">
+                    <ha-textfield
+                        label="Vlastný názov (voliteľné)"
+                        configValue="${id}_name"
+                    ></ha-textfield>
+                </div>
             </div>
-          `)}</div>
-        ` : ''}
-        ${this._activeGroup === 'rads' ? html`
-          <div class="group"><h3>Radiátory samostatne (Max 5)</h3>${[1, 2, 3, 4, 5].map(i => generatePicker(`Teplota Radiátor ${i}`, `radiator_${i}_temp`))}</div>
-        ` : ''}
-      </div>
-    `;
-  }
+        `;
 
-  static get styles() {
-    return css`
-      .row { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
-      .label-input { flex: 1; }
-      ha-entity-picker { flex: 2; width: 100%; display: block; }
-      
-      .tabs { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 15px; }
-      .tab { background: #333; color: #ccc; border: 1px solid #555; padding: 8px 12px; border-radius: 4px; cursor: pointer; transition: 0.2s; font-family: sans-serif; font-size: 14px;}
-      .tab:hover { background: #444; color: #fff; }
-      .tab.active { background: var(--boiler-on, #00ffd5); color: #000; border-color: var(--boiler-on, #00ffd5); font-weight: bold; }
-      
-      .group { border: 1px solid #444; padding: 15px; border-radius: 5px; color: white; background: rgba(0,0,0,0.2); }
-      .group h3 { margin-top: 0; margin-bottom: 15px; border-bottom: 1px solid #555; padding-bottom: 5px; font-family: sans-serif;}
-      select { background: #333; color: white; padding: 5px; border-radius: 4px; border: 1px solid #555; }
-    `;
+    const template = `
+            <style>
+                .row { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+                .label-input { flex: 1; }
+                ha-entity-picker { flex: 2; }
+                .group { margin-bottom: 20px; border: 1px solid #444; padding: 10px; border-radius: 5px; color: white; }
+                .group h3 { margin-top: 0; }
+                select { background: #333; color: white; padding: 5px; border-radius: 4px; border: 1px solid #555; }
+            </style>
+            
+            <div class="group">
+                <h3>Hlavný kotol</h3>
+                ${generatePicker("Stav kotla (Entity)", "boiler_state")}
+            </div>
+
+            <div class="group">
+                <h3>Čidlá (Energia, teploty, spotreba)</h3>
+                ${SENSORS.map(s => generatePicker(s.name, s.id)).join('')}
+            </div>
+
+            <div class="group">
+                <h3>Ovládanie a nastavenia</h3>
+                ${CONTROLS.map(c => generatePicker(c.name, c.id)).join('')}
+            </div>
+
+            <div class="group">
+                <h3>Diagnostika</h3>
+                ${DIAGNOSTICS.map(d => generatePicker(d.name, d.id)).join('')}
+            </div>
+
+            <div class="group">
+                <h3>Okruhy (Max 5)</h3>
+                ${[1, 2, 3, 4, 5].map(i => `
+                    <div style="border-bottom:1px solid #555; margin-bottom:10px; padding-bottom:5px;">
+                        <h4>Okruh ${i}</h4>
+                        <div class="row">Typ: 
+                            <select configValue="circuit_${i}_type">
+                                <option value="podlaha">Podlaha</option>
+                                <option value="radiatory">Radiátory</option>
+                                <option value="stropne">Stropné (Kúrenie/Chladenie)</option>
+                            </select>
+                        </div>
+                        ${generatePicker(`Aktuálna teplota Okruh ${i}`, `circuit_${i}_temp`)}
+                        ${generatePicker(`Žiadaná teplota Okruh ${i}`, `circuit_${i}_target`)}
+                    </div>
+                `).join('')}
+            </div>
+            
+            <div class="group">
+                <h3>Radiátory samostatne (Max 5)</h3>
+                ${[1, 2, 3, 4, 5].map(i => generatePicker(`Teplota Radiátor ${i}`, `radiator_${i}_temp`)).join('')}
+            </div>
+        `;
+
+    this.shadowRoot.innerHTML = template;
+
+    // Manual binding after render for vanilla JS
+    this.shadowRoot.querySelectorAll("ha-entity-picker, ha-textfield, select").forEach(el => {
+      const configVal = el.getAttribute("configValue");
+      if (el.tagName === 'HA-ENTITY-PICKER') {
+        el.hass = this.hass;
+        el.value = this._config[configVal] || "";
+        el.addEventListener('value-changed', (ev) => this.configChanged(ev));
+      } else if (el.tagName === 'HA-TEXTFIELD') {
+        el.value = this._config[configVal] || "";
+        el.addEventListener('input', (ev) => this.configChanged(ev));
+      } else if (el.tagName === 'SELECT') {
+        el.value = this._config[configVal] || "radiatory";
+        el.addEventListener('change', (ev) => this.configChanged(ev));
+      }
+    });
   }
 }
 customElements.define("ha-vitodens-pro-editor", HaVitodensProEditor);

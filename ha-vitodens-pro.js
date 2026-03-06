@@ -575,32 +575,33 @@ class HaVitodensProEditor extends HTMLElement {
                 .label-input { flex: 1; }
                 ha-entity-picker { flex: 2; }
                 .group { margin-bottom: 20px; border: 1px solid #444; padding: 10px; border-radius: 5px; color: white; }
-                .group h3 { margin-top: 0; }
+                .group summary { cursor: pointer; outline: none; margin-bottom: 10px; }
+                .group summary h3 { display: inline-block; margin-top: 0; margin-bottom: 0; margin-left: 5px; }
                 select { background: #333; color: white; padding: 5px; border-radius: 4px; border: 1px solid #555; }
             </style>
             
-            <div class="group">
-                <h3>Hlavný kotol</h3>
+            <details class="group" open>
+                <summary><h3>Hlavný kotol</h3></summary>
                 ${generatePicker("Stav kotla (Entity)", "boiler_state")}
-            </div>
+            </details>
 
-            <div class="group">
-                <h3>Čidlá (Energia, teploty, spotreba)</h3>
+            <details class="group">
+                <summary><h3>Čidlá (Energia, teploty, spotreba)</h3></summary>
                 ${SENSORS.map(s => generatePicker(s.name, s.id)).join('')}
-            </div>
+            </details>
 
-            <div class="group">
-                <h3>Ovládanie a nastavenia</h3>
+            <details class="group">
+                <summary><h3>Ovládanie a nastavenia</h3></summary>
                 ${CONTROLS.map(c => generatePicker(c.name, c.id)).join('')}
-            </div>
+            </details>
 
-            <div class="group">
-                <h3>Diagnostika</h3>
+            <details class="group">
+                <summary><h3>Diagnostika</h3></summary>
                 ${DIAGNOSTICS.map(d => generatePicker(d.name, d.id)).join('')}
-            </div>
+            </details>
 
-            <div class="group">
-                <h3>Okruhy (Max 5)</h3>
+            <details class="group">
+                <summary><h3>Okruhy (Max 5)</h3></summary>
                 ${[1, 2, 3, 4, 5].map(i => `
                     <div style="border-bottom:1px solid #555; margin-bottom:10px; padding-bottom:5px;">
                         <h4>Okruh ${i}</h4>
@@ -615,12 +616,12 @@ class HaVitodensProEditor extends HTMLElement {
                         ${generatePicker(`Žiadaná teplota Okruh ${i}`, `circuit_${i}_target`)}
                     </div>
                 `).join('')}
-            </div>
+            </details>
             
-            <div class="group">
-                <h3>Radiátory samostatne (Max 5)</h3>
+            <details class="group">
+                <summary><h3>Radiátory samostatne (Max 5)</h3></summary>
                 ${[1, 2, 3, 4, 5].map(i => generatePicker(`Teplota Radiátor ${i}`, `radiator_${i}_temp`)).join('')}
-            </div>
+            </details>
         `;
 
     this.shadowRoot.innerHTML = template;

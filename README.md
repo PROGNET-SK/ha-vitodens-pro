@@ -1,4 +1,4 @@
-Pridať do používateľského panelu# HA Vitodens Pro
+# HA Vitodens Pro
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg?style=for-the-badge)](https://github.com/hacs/integration)
 [![Version](https://img.shields.io/badge/Version-1.0.1-blue.svg)](https://github.com/PROGNET-SK/ha-vitodens-pro/releases/tag/v1.0.1)

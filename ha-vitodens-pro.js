@@ -73,7 +73,7 @@ class HaVitodensPro extends HTMLElement {
     loadGSAP().then(() => this.gsapLoaded = true);
   }
 
-  set config(config) {
+  setConfig(config) {
     if (!config) return;
     this._config = config;
     this.render();

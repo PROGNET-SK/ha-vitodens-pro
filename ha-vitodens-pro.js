@@ -521,188 +521,131 @@ class HaVitodensPro extends HTMLElement {
 customElements.define("ha-vitodens-pro", HaVitodensPro);
 
 // Editor Card
-class HaVitodensProEditor extends HTMLElement {
+class HaVitodensProEditor extends LitElement {
+  static get properties() {
+    return {
+      hass: { type: Object },
+      _config: { type: Object },
+      _activeGroup: { type: String }
+    };
+  }
+
   constructor() {
     super();
-    this.attachShadow({ mode: "open" });
-    this.activeGroup = "main";
-    this.rendered = false;
+    this._activeGroup = "main";
   }
 
   setConfig(config) {
     this._config = { ...config };
-    if (!this.rendered) {
-      this.render();
-      this.rendered = true;
-    } else {
-      this.updateValues();
-    }
-  }
-
-  get config() { return this._config; }
-
-  set hass(hass) {
-    this._hass = hass;
-    if (this.shadowRoot) {
-      this.shadowRoot.querySelectorAll("ha-entity-picker").forEach(el => {
-        el.hass = hass;
-      });
-    }
-  }
-
-  get hass() {
-    return this._hass;
   }
 
   configChanged(ev) {
     if (!this._config || !this.hass) return;
     const target = ev.target;
-    // For ha-entity-picker
-    const configVal = target.getAttribute("configValue") || target.configValue;
-    if (configVal) {
+    const configVal = target.configValue;
+
+    if (configVal && this._config[configVal] !== target.value) {
       this._config = { ...this._config, [configVal]: target.value };
-      window.dispatchEvent(
-        new CustomEvent("config-changed", {
-          detail: { config: this._config },
-          bubbles: true,
-          composed: true
-        })
-      );
+
+      this.dispatchEvent(new CustomEvent("config-changed", {
+        detail: { config: this._config },
+        bubbles: true,
+        composed: true
+      }));
     }
   }
 
   switchGroup(group) {
-    this.activeGroup = group;
-    // Re-render completely so the active group elements are added fresh to DOM
-    this.render();
+    this._activeGroup = group;
   }
 
   render() {
-    if (!this.shadowRoot) return;
+    if (!this.hass || !this._config) {
+      return html``;
+    }
 
-    const generatePicker = (label, id) => `
-            <div class="row">
-                <ha-entity-picker
-                    configValue="${id}"
-                    label="${label}"
-                    allow-custom-entity
-                ></ha-entity-picker>
-                <div class="label-input">
-                    <ha-textfield
-                        label="Vlastný názov (voliteľné)"
-                        configValue="${id}_name"
-                    ></ha-textfield>
-                </div>
-            </div>
-        `;
-
-    const tabsHtml = `
-      <div class="tabs">
-        <button class="tab ${this.activeGroup === 'main' ? 'active' : ''}" data-group="main">Hlavný kotol</button>
-        <button class="tab ${this.activeGroup === 'sensors' ? 'active' : ''}" data-group="sensors">Čidlá</button>
-        <button class="tab ${this.activeGroup === 'controls' ? 'active' : ''}" data-group="controls">Ovládanie</button>
-        <button class="tab ${this.activeGroup === 'diag' ? 'active' : ''}" data-group="diag">Diagnostika</button>
-        <button class="tab ${this.activeGroup === 'circuits' ? 'active' : ''}" data-group="circuits">Okruhy(5)</button>
-        <button class="tab ${this.activeGroup === 'rads' ? 'active' : ''}" data-group="rads">Radiátory(5)</button>
+    const generatePicker = (label, id) => html`
+      <div class="row">
+        <ha-entity-picker
+          .hass=${this.hass}
+          .value=${this._config[id] || ""}
+          .configValue=${id}
+          .label=${label}
+          allow-custom-entity
+          @value-changed=${this.configChanged}
+        ></ha-entity-picker>
+        <div class="label-input">
+          <ha-textfield
+            .label=${"Vlastný názov (voliteľné)"}
+            .value=${this._config[`${id}_name`] || ""}
+            .configValue=${`${id}_name`}
+            @input=${this.configChanged}
+          ></ha-textfield>
+        </div>
       </div>
     `;
 
-    // Only generate the HTML for the currently active tab TO GUARANTEE DOM MOUNT
-    let activeContentHtml = '';
+    return html`
+      <div class="tabs">
+        <button class="tab ${this._activeGroup === 'main' ? 'active' : ''}" @click=${() => this.switchGroup('main')}>Hlavný kotol</button>
+        <button class="tab ${this._activeGroup === 'sensors' ? 'active' : ''}" @click=${() => this.switchGroup('sensors')}>Čidlá</button>
+        <button class="tab ${this._activeGroup === 'controls' ? 'active' : ''}" @click=${() => this.switchGroup('controls')}>Ovládanie</button>
+        <button class="tab ${this._activeGroup === 'diag' ? 'active' : ''}" @click=${() => this.switchGroup('diag')}>Diagnostika</button>
+        <button class="tab ${this._activeGroup === 'circuits' ? 'active' : ''}" @click=${() => this.switchGroup('circuits')}>Okruhy(5)</button>
+        <button class="tab ${this._activeGroup === 'rads' ? 'active' : ''}" @click=${() => this.switchGroup('rads')}>Radiátory(5)</button>
+      </div>
 
-    if (this.activeGroup === 'main') {
-      activeContentHtml = `<div class="group"><h3>Hlavný kotol</h3>${generatePicker("Stav kotla (Entity)", "boiler_state")}</div>`;
-    } else if (this.activeGroup === 'sensors') {
-      activeContentHtml = `<div class="group"><h3>Čidlá (Energia, teploty, spotreba)</h3>${SENSORS.map(s => generatePicker(s.name, s.id)).join('')}</div>`;
-    } else if (this.activeGroup === 'controls') {
-      activeContentHtml = `<div class="group"><h3>Ovládanie a nastavenia</h3>${CONTROLS.map(c => generatePicker(c.name, c.id)).join('')}</div>`;
-    } else if (this.activeGroup === 'diag') {
-      activeContentHtml = `<div class="group"><h3>Diagnostika</h3>${DIAGNOSTICS.map(d => generatePicker(d.name, d.id)).join('')}</div>`;
-    } else if (this.activeGroup === 'circuits') {
-      activeContentHtml = `<div class="group"><h3>Okruhy (Max 5)</h3>${[1, 2, 3, 4, 5].map(i => `
+      <div class="active-content-container">
+        ${this._activeGroup === 'main' ? html`
+          <div class="group"><h3>Hlavný kotol</h3>${generatePicker("Stav kotla (Entity)", "boiler_state")}</div>
+        ` : ''}
+        ${this._activeGroup === 'sensors' ? html`
+          <div class="group"><h3>Čidlá (Energia, teploty, spotreba)</h3>${SENSORS.map(s => generatePicker(s.name, s.id))}</div>
+        ` : ''}
+        ${this._activeGroup === 'controls' ? html`
+          <div class="group"><h3>Ovládanie a nastavenia</h3>${CONTROLS.map(c => generatePicker(c.name, c.id))}</div>
+        ` : ''}
+        ${this._activeGroup === 'diag' ? html`
+          <div class="group"><h3>Diagnostika</h3>${DIAGNOSTICS.map(d => generatePicker(d.name, d.id))}</div>
+        ` : ''}
+        ${this._activeGroup === 'circuits' ? html`
+          <div class="group"><h3>Okruhy (Max 5)</h3>${[1, 2, 3, 4, 5].map(i => html`
             <div style="border-bottom:1px solid #555; margin-bottom:10px; padding-bottom:5px;">
-                <h4>Okruh ${i}</h4>
-                <div class="row">Typ: 
-                    <select configValue="circuit_${i}_type">
-                        <option value="podlaha">Podlaha</option>
-                        <option value="radiatory">Radiátory</option>
-                        <option value="stropne">Stropné (Kúrenie/Chladenie)</option>
-                    </select>
-                </div>
-                ${generatePicker(`Aktuálna teplota Okruh ${i}`, `circuit_${i}_temp`)}
-                ${generatePicker(`Žiadaná teplota Okruh ${i}`, `circuit_${i}_target`)}
+              <h4 style="margin: 0 0 10px 0;">Okruh ${i}</h4>
+              <div class="row">Typ: 
+                <select .value=${this._config[`circuit_${i}_type`] || "radiatory"} .configValue=${`circuit_${i}_type`} @change=${this.configChanged}>
+                  <option value="podlaha">Podlaha</option>
+                  <option value="radiatory">Radiátory</option>
+                  <option value="stropne">Stropné (Kúrenie/Chladenie)</option>
+                </select>
+              </div>
+              ${generatePicker(`Aktuálna teplota Okruh ${i}`, `circuit_${i}_temp`)}
+              ${generatePicker(`Žiadaná teplota Okruh ${i}`, `circuit_${i}_target`)}
             </div>
-        `).join('')}</div>`;
-    } else if (this.activeGroup === 'rads') {
-      activeContentHtml = `<div class="group"><h3>Radiátory samostatne (Max 5)</h3>${[1, 2, 3, 4, 5].map(i => generatePicker(`Teplota Radiátor ${i}`, `radiator_${i}_temp`)).join('')}</div>`;
-    }
-
-    const template = `
-            <style>
-                .row { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
-                .label-input { flex: 1; }
-                ha-entity-picker { flex: 2; width: 100%; display: block; }
-                
-                .tabs { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 15px; }
-                .tab { background: #333; color: #ccc; border: 1px solid #555; padding: 8px 12px; border-radius: 4px; cursor: pointer; transition: 0.2s; font-family: sans-serif; font-size: 14px;}
-                .tab:hover { background: #444; color: #fff; }
-                .tab.active { background: var(--boiler-on, #00ffd5); color: #000; border-color: var(--boiler-on, #00ffd5); font-weight: bold; }
-                
-                .group { border: 1px solid #444; padding: 15px; border-radius: 5px; color: white; background: rgba(0,0,0,0.2); }
-                .group h3 { margin-top: 0; margin-bottom: 15px; border-bottom: 1px solid #555; padding-bottom: 5px; font-family: sans-serif;}
-                select { background: #333; color: white; padding: 5px; border-radius: 4px; border: 1px solid #555; }
-            </style>
-            ${tabsHtml}
-            <div class="active-content-container">
-                ${activeContentHtml}
-            </div>
-        `;
-
-    this.shadowRoot.innerHTML = template;
-
-    // Attach Tab listeners
-    this.shadowRoot.querySelectorAll(".tab").forEach(tab => {
-      tab.addEventListener("click", (e) => {
-        e.preventDefault();
-        this.switchGroup(e.target.getAttribute("data-group"));
-      });
-    });
-
-    // Attach Event Listeners to inputs cleanly
-    this.shadowRoot.querySelectorAll("ha-entity-picker, ha-textfield, select").forEach(el => {
-      const configVal = el.getAttribute("configValue");
-      if (el.tagName === 'HA-ENTITY-PICKER') {
-        el.hass = this.hass;
-        el.value = this._config[configVal] || "";
-        el.addEventListener('value-changed', (ev) => this.configChanged(ev));
-      } else if (el.tagName === 'HA-TEXTFIELD') {
-        el.value = this._config[configVal] || "";
-        el.addEventListener('input', (ev) => this.configChanged(ev));
-      } else if (el.tagName === 'SELECT') {
-        el.value = this._config[configVal] || "radiatory";
-        el.addEventListener('change', (ev) => this.configChanged(ev));
-      }
-    });
-
+          `)}</div>
+        ` : ''}
+        ${this._activeGroup === 'rads' ? html`
+          <div class="group"><h3>Radiátory samostatne (Max 5)</h3>${[1, 2, 3, 4, 5].map(i => generatePicker(`Teplota Radiátor ${i}`, `radiator_${i}_temp`))}</div>
+        ` : ''}
+      </div>
+    `;
   }
 
-  updateValues() {
-    if (!this.shadowRoot) return;
-    this.shadowRoot.querySelectorAll("ha-entity-picker, ha-textfield, select").forEach(el => {
-      const configVal = el.getAttribute("configValue");
-      if (configVal) {
-        if (el.tagName === 'HA-ENTITY-PICKER') {
-          el.hass = this.hass;
-          if (el.value !== this._config[configVal]) {
-            el.value = this._config[configVal] || "";
-          }
-        } else if (el.tagName === 'HA-TEXTFIELD' || el.tagName === 'SELECT') {
-          if (el.value !== (this._config[configVal] || "")) {
-            el.value = this._config[configVal] || "";
-          }
-        }
-      }
-    });
+  static get styles() {
+    return css`
+      .row { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+      .label-input { flex: 1; }
+      ha-entity-picker { flex: 2; width: 100%; display: block; }
+      
+      .tabs { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 15px; }
+      .tab { background: #333; color: #ccc; border: 1px solid #555; padding: 8px 12px; border-radius: 4px; cursor: pointer; transition: 0.2s; font-family: sans-serif; font-size: 14px;}
+      .tab:hover { background: #444; color: #fff; }
+      .tab.active { background: var(--boiler-on, #00ffd5); color: #000; border-color: var(--boiler-on, #00ffd5); font-weight: bold; }
+      
+      .group { border: 1px solid #444; padding: 15px; border-radius: 5px; color: white; background: rgba(0,0,0,0.2); }
+      .group h3 { margin-top: 0; margin-bottom: 15px; border-bottom: 1px solid #555; padding-bottom: 5px; font-family: sans-serif;}
+      select { background: #333; color: white; padding: 5px; border-radius: 4px; border: 1px solid #555; }
+    `;
   }
 }
 customElements.define("ha-vitodens-pro-editor", HaVitodensProEditor);

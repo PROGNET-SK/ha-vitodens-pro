@@ -534,6 +534,19 @@ class HaVitodensProEditor extends HTMLElement {
 
   get config() { return this._config; }
 
+  set hass(hass) {
+    this._hass = hass;
+    if (this.shadowRoot) {
+      this.shadowRoot.querySelectorAll("ha-entity-picker").forEach(el => {
+        el.hass = hass;
+      });
+    }
+  }
+
+  get hass() {
+    return this._hass;
+  }
+
   configChanged(ev) {
     if (!this._config || !this.hass) return;
     const target = ev.target;

@@ -73,10 +73,14 @@ class HaVitodensPro extends HTMLElement {
     loadGSAP().then(() => this.gsapLoaded = true);
   }
 
-  set config(config) {
+  setConfig(config) {
     if (!config) return;
     this._config = config;
     this.render();
+  }
+
+  getCardSize() {
+    return 3;
   }
 
   set hass(hass) {
@@ -106,11 +110,13 @@ class HaVitodensPro extends HTMLElement {
 
     // Modifikacia hodnot - prevzate z HA state
     const updateText = (className, entityId) => {
-      if (!entityId) return;
       let el = this.shadowRoot.querySelector(className);
-      if (el && this._hass.states[entityId]) {
+      if (!el) return;
+      if (entityId && this._hass.states[entityId] && this._hass.states[entityId].state !== "unavailable" && this._hass.states[entityId].state !== "unknown") {
         const s = this._hass.states[entityId];
         el.innerText = `${s.state} ${s.attributes.unit_of_measurement || ""}`;
+      } else {
+        el.innerText = "0";
       }
     };
 
@@ -193,7 +199,7 @@ class HaVitodensPro extends HTMLElement {
                  <div class="circuit-box targetable">
                     <div class="circuit-title">${getName(`circuit_${i}`, `Okruh ${i}`)} <small>(${this._config[`circuit_${i}_type`] || 'radiator'})</small></div>
                     <div class="circuit-temps">
-                        <span class="actual circuit-val-${i}">--</span> / <span class="target circuit-tgt-${i}">--</span>
+                        <span class="actual circuit-val-${i}">0</span> / <span class="target circuit-tgt-${i}">0</span>
                     </div>
                  </div>
                 `;
@@ -206,7 +212,7 @@ class HaVitodensPro extends HTMLElement {
                  <div class="circuit-box rad-color">
                     <div class="circuit-title rad">${getName(`radiator_${i}`, `Radiátor ${i}`)}</div>
                     <div class="circuit-temps">
-                        <span class="actual radiator-val-${i}">--</span>
+                        <span class="actual radiator-val-${i}">0</span>
                     </div>
                  </div>
                 `;
@@ -437,7 +443,7 @@ class HaVitodensPro extends HTMLElement {
                         ${SENSORS.map(s => `
                             <div class="data-row">
                                 <span class="data-lbl">${getName(s.id, s.name)}</span>
-                                <span class="data-val val-${s.id}">--</span>
+                                <span class="data-val val-${s.id}">0</span>
                             </div>
                         `).join('')}
                     </div>
@@ -448,7 +454,7 @@ class HaVitodensPro extends HTMLElement {
                         ${CONTROLS.map(c => `
                             <div class="data-row interactive" data-ctrl="${c.id}">
                                 <span class="data-lbl">${getName(c.id, c.name)}</span>
-                                <span class="data-val val-${c.id}">--</span>
+                                <span class="data-val val-${c.id}">0</span>
                             </div>
                         `).join('')}
                         
@@ -456,7 +462,7 @@ class HaVitodensPro extends HTMLElement {
                         ${DIAGNOSTICS.map(d => `
                             <div class="data-row">
                                 <span class="data-lbl">${getName(d.id, d.name)}</span>
-                                <span class="data-val val-${d.id}">--</span>
+                                <span class="data-val val-${d.id}">0</span>
                             </div>
                         `).join('')}
                     </div>

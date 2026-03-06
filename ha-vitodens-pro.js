@@ -500,6 +500,16 @@ class HaVitodensPro extends HTMLElement {
 
     this.updateStateValues();
   }
+
+  static getConfigElement() {
+    return document.createElement("ha-vitodens-pro-editor");
+  }
+
+  static getStubConfig() {
+    return {
+      type: "custom:ha-vitodens-pro",
+    };
+  }
 }
 
 customElements.define("ha-vitodens-pro", HaVitodensPro);

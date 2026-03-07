@@ -549,8 +549,8 @@ class HaVitodensProEditor extends HTMLElement {
   set hass(hass) {
     this._hass = hass;
     if (this.shadowRoot) {
-      const pickers = this.shadowRoot.querySelectorAll("ha-entity-picker");
-      pickers.forEach(el => {
+      const forms = this.shadowRoot.querySelectorAll("ha-form");
+      forms.forEach(el => {
         el.hass = hass;
       });
     }
@@ -580,47 +580,67 @@ class HaVitodensProEditor extends HTMLElement {
   render() {
     if (!this.shadowRoot) return;
 
-    const generatePicker = (label, id) => `
-            <div class="mapping-row">
-                <div class="mapping-title">${label}</div>
-                <div class="mapping-inputs">
-                    <div class="picker-container">
-                        <ha-entity-picker
-                            configValue="${id}"
-                            label="Entita ID (napr. sensor.teplota)"
-                            allow-custom-entity
-                            fixedMenuPosition
-                        ></ha-entity-picker>
-                    </div>
-                    <ha-textfield
-                        label="Vlastný názov (voliteľné)"
-                        configValue="${id}_name"
-                    ></ha-textfield>
-                </div>
-            </div>
-        `;
+    // Helper to create a mapping row with ha-form for the picker and name
+    const createMappingRow = (label, id) => {
+      const row = document.createElement("div");
+      row.className = "mapping-row";
+
+      const title = document.createElement("div");
+      title.className = "mapping-title";
+      title.textContent = label;
+      row.appendChild(title);
+
+      const inputs = document.createElement("div");
+      inputs.className = "mapping-inputs";
+
+      // Entity Picker via ha-form (more stable)
+      const form = document.createElement("ha-form");
+      form.hass = this.hass;
+      form.data = this._config;
+      form.schema = [
+        {
+          name: id,
+          label: "Entita ID",
+          selector: { entity: {} }
+        }
+      ];
+      form.computeLabel = (f) => f.label;
+      form.addEventListener("value-changed", (ev) => {
+        if (ev.detail && ev.detail.value) {
+          this.configChanged(ev);
+        }
+      });
+
+      // Custom name field
+      const nameField = document.createElement("ha-textfield");
+      nameField.label = "Vlastný názov (voliteľné)";
+      nameField.setAttribute("configValue", `${id}_name`);
+      nameField.value = this._config[`${id}_name`] || "";
+      nameField.addEventListener("input", (ev) => this.configChanged(ev));
+
+      inputs.appendChild(form);
+      inputs.appendChild(nameField);
+      row.appendChild(inputs);
+      return row;
+    };
 
     const template = `
             <style>
                 :host {
                     --lumina-cyan: #00ffd5;
-                    --lumina-glow: rgba(0, 255, 213, 0.4);
                 }
                 .card-config {
                     display: flex;
                     flex-direction: column;
                     gap: 12px;
                     padding: 8px;
-                    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
                 }
                 .editor-header {
                     padding: 16px;
                     background: linear-gradient(90deg, #111, #222);
                     border-radius: 12px;
                     border: 1px solid #333;
-                    margin-bottom: 8px;
                     border-left: 4px solid var(--lumina-cyan);
-                    box-shadow: 0 4px 15px rgba(0,0,0,0.3);
                 }
                 .editor-header h2 { margin: 0; font-size: 1.1rem; color: #fff; }
                 .editor-header p { margin: 5px 0 0; font-size: 0.8rem; color: #aaa; }
@@ -629,38 +649,22 @@ class HaVitodensProEditor extends HTMLElement {
                     border: 1px solid rgba(255, 255, 255, 0.1);
                     border-radius: 12px;
                     background: rgba(255, 255, 255, 0.03);
-                    overflow: hidden;
                     margin-bottom: 8px;
-                    transition: all 0.3s ease;
-                }
-                details.section[open] {
-                    background: rgba(255, 255, 255, 0.05);
-                    border-color: rgba(0, 255, 213, 0.3);
-                    box-shadow: 0 0 15px rgba(0, 255, 213, 0.05);
                 }
                 .section-summary {
                     font-weight: bold;
-                    font-size: 0.95rem;
                     padding: 14px 16px;
-                    background: rgba(255,255,255,0.05);
                     color: #fff;
                     cursor: pointer;
                     display: flex;
                     align-items: center;
                     justify-content: space-between;
-                    list-style: none;
-                    user-select: none;
                 }
-                .section-summary:hover { background: rgba(255,255,255,0.08); }
-                .section-summary::-webkit-details-marker { display: none; }
                 .section-summary::after {
                     content: '\u25BC';
                     font-size: 0.8rem;
-                    transition: transform 0.3s ease;
                     color: var(--lumina-cyan);
                 }
-                details.section[open] .section-summary::after { transform: rotate(180deg); }
-
                 .section-content { padding: 16px; display: flex; flex-direction: column; gap: 12px; }
 
                 .mapping-row {
@@ -668,150 +672,122 @@ class HaVitodensProEditor extends HTMLElement {
                     border-radius: 10px;
                     padding: 12px;
                     border: 1px solid rgba(255,255,255,0.05);
-                    display: flex;
-                    flex-direction: column;
-                    gap: 10px;
                 }
                 .mapping-title {
                     font-size: 0.85rem;
                     font-weight: 600;
                     color: var(--lumina-cyan);
-                    letter-spacing: 0.5px;
+                    margin-bottom: 8px;
                 }
                 .mapping-inputs {
                     display: grid;
                     grid-template-columns: 1fr 1fr;
                     gap: 10px;
                 }
+                ha-form { --ha-form-grid-columns: 1; }
                 @media (max-width: 500px) {
                     .mapping-inputs { grid-template-columns: 1fr; }
                 }
-
-                ha-entity-picker, ha-textfield, ha-select {
-                    --mdc-theme-primary: var(--lumina-cyan);
-                    --mdc-text-field-fill-color: rgba(255,255,255,0.03);
-                    --mdc-text-field-ink-color: #fff;
-                    --mdc-text-field-label-ink-color: #aaa;
-                    display: block;
-                    width: 100%;
-                }
-                ha-entity-picker {
-                    min-height: 56px;
-                    margin-bottom: 4px;
-                }
-                .picker-container {
-                    position: relative;
-                    min-height: 56px;
-                    width: 100%;
-                }
-
-
-                .row-select { margin-top: 5px; }
             </style>
-            
             <div class="card-config">
                 <div class="editor-header">
                     <h2>HA Vitodens Pro</h2>
                     <p>Konfigurácia karty a mapovanie dátových bodov</p>
                 </div>
-
-                <details class="section" open>
-                    <summary class="section-summary">Hlavný kotol</summary>
-                    <div class="section-content">
-                        ${generatePicker("Stav kotla", "boiler_state")}
-                    </div>
-                </details>
-
-                <details class="section">
-                    <summary class="section-summary">Čidlá (Energia, teploty, spotreba)</summary>
-                    <div class="section-content">
-                        ${SENSORS.map(s => generatePicker(s.name, s.id)).join('')}
-                    </div>
-                </details>
-
-                <details class="section">
-                    <summary class="section-summary">Ovládanie a nastavenia</summary>
-                    <div class="section-content">
-                        ${CONTROLS.map(c => generatePicker(c.name, c.id)).join('')}
-                    </div>
-                </details>
-
-                <details class="section">
-                    <summary class="section-summary">Diagnostika</summary>
-                    <div class="section-content">
-                        ${DIAGNOSTICS.map(d => generatePicker(d.name, d.id)).join('')}
-                    </div>
-                </details>
-
-                <details class="section">
-                    <summary class="section-summary">Okruhy (Max 5)</summary>
-                    <div class="section-content">
-                        ${[1, 2, 3, 4, 5].map(i => `
-                            <div class="mapping-row">
-                                <div class="mapping-title">Okruh ${i}</div>
-                                <div class="row-select">
-                                    <ha-select
-                                        label="Typ okruhu"
-                                        configValue="circuit_${i}_type"
-                                        fixedMenuPosition
-                                        naturalMenuWidth
-                                    >
-                                        <ha-list-item value="podlaha">Podlaha</ha-list-item>
-                                        <ha-list-item value="radiatory">Radiátory</ha-list-item>
-                                        <ha-list-item value="stropne">Stropné (Kúrenie/Chladenie)</ha-list-item>
-                                    </ha-select>
-                                </div>
-                                <div class="mapping-inputs">
-                                    <div class="picker-container">
-                                        <ha-entity-picker
-                                            configValue="circuit_${i}_temp"
-                                            label="Aktuálna teplota"
-                                            allow-custom-entity
-                                            fixedMenuPosition
-                                        ></ha-entity-picker>
-                                    </div>
-                                    <div class="picker-container">
-                                        <ha-entity-picker
-                                            configValue="circuit_${i}_target"
-                                            label="Žiadaná teplota"
-                                            allow-custom-entity
-                                            fixedMenuPosition
-                                        ></ha-entity-picker>
-                                    </div>
-                                </div>
-                            </div>
-                        `).join('')}
-                    </div>
-                </details>
-
-                <details class="section">
-                    <summary class="section-summary">Radiátory samostatne (Max 5)</summary>
-                    <div class="section-content">
-                        ${[1, 2, 3, 4, 5].map(i => generatePicker(`Radiátor ${i}`, `radiator_${i}_temp`)).join('')}
-                    </div>
-                </details>
+                <div id="sections-container"></div>
             </div>
         `;
 
     this.shadowRoot.innerHTML = template;
+    const container = this.shadowRoot.querySelector("#sections-container");
+
+    const createSection = (title, fields, isOpen = false) => {
+      const details = document.createElement("details");
+      details.className = "section";
+      if (isOpen) details.open = true;
+
+      const summary = document.createElement("summary");
+      summary.className = "section-summary";
+      summary.textContent = title;
+      details.appendChild(summary);
+
+      const content = document.createElement("div");
+      content.className = "section-content";
+      fields.forEach(f => content.appendChild(createMappingRow(f.name, f.id)));
+      details.appendChild(content);
+      return details;
+    };
+
+    // Build regions
+    container.appendChild(createSection("Hlavný kotol", [{ id: "boiler_state", name: "Stav kotla" }], true));
+    container.appendChild(createSection("Čidlá (Energia, teploty, spotreba)", SENSORS));
+    container.appendChild(createSection("Ovládanie a nastavenia", CONTROLS));
+    container.appendChild(createSection("Diagnostika", DIAGNOSTICS));
+
+    // Custom logic for Circuits (Okruhy)
+    const circuitSection = document.createElement("details");
+    circuitSection.className = "section";
+    circuitSection.innerHTML = `<summary class="section-summary">Okruhy (Max 5)</summary>`;
+    const circuitContent = document.createElement("div");
+    circuitContent.className = "section-content";
+
+    for (let i = 1; i <= 5; i++) {
+      const row = document.createElement("div");
+      row.className = "mapping-row";
+      row.innerHTML = `<div class="mapping-title">Okruh ${i}</div>`;
+
+      const typeSelectForm = document.createElement("ha-form");
+      typeSelectForm.hass = this.hass;
+      typeSelectForm.data = this._config;
+      typeSelectForm.schema = [{
+        name: `circuit_${i}_type`,
+        label: "Typ okruhu",
+        selector: {
+          select: {
+            options: [
+              { value: "podlaha", label: "Podlaha" },
+              { value: "radiatory", label: "Radiátory" },
+              { value: "stropne", label: "Stropné (Kúrenie/Chladenie)" }
+            ]
+          }
+        }
+      }];
+      typeSelectForm.addEventListener("value-changed", (ev) => this.configChanged(ev));
+
+      const inputs = document.createElement("div");
+      inputs.className = "mapping-inputs";
+
+      const tempForm = document.createElement("ha-form");
+      tempForm.hass = this.hass;
+      tempForm.data = this._config;
+      tempForm.schema = [{ name: `circuit_${i}_temp`, label: "Aktuálna teplota", selector: { entity: {} } }];
+      tempForm.addEventListener("value-changed", (ev) => this.configChanged(ev));
+
+      const targetForm = document.createElement("ha-form");
+      targetForm.hass = this.hass;
+      targetForm.data = this._config;
+      targetForm.schema = [{ name: `circuit_${i}_target`, label: "Žiadaná teplota", selector: { entity: {} } }];
+      targetForm.addEventListener("value-changed", (ev) => this.configChanged(ev));
+
+      row.appendChild(typeSelectForm);
+      inputs.appendChild(tempForm);
+      inputs.appendChild(targetForm);
+      row.appendChild(inputs);
+      circuitContent.appendChild(row);
+    }
+    circuitSection.appendChild(circuitContent);
+    container.appendChild(circuitSection);
+
+    // Radiators
+    container.appendChild(createSection("Radiátory samostatne (Max 5)", [1, 2, 3, 4, 5].map(i => ({ id: `radiator_${i}_temp`, name: `Radiátor ${i}` }))));
+
 
     // Manual binding after render for vanilla JS
-    this.shadowRoot.querySelectorAll("ha-entity-picker, ha-textfield, ha-select").forEach(el => {
+    // Manual binding for textfields
+    this.shadowRoot.querySelectorAll("ha-textfield").forEach(el => {
       const configVal = el.getAttribute("configValue");
-      if (el.tagName === 'HA-ENTITY-PICKER') {
-        if (this.hass) el.hass = this.hass;
-        el.value = this._config[configVal] || "";
-        el.addEventListener('value-changed', (ev) => this.configChanged(ev));
-        // Force refresh
-        setTimeout(() => { if (this.hass) el.hass = this.hass; }, 100);
-      } else if (el.tagName === 'HA-TEXTFIELD') {
-        el.value = this._config[configVal] || "";
-        el.addEventListener('input', (ev) => this.configChanged(ev));
-      } else if (el.tagName === 'HA-SELECT') {
-        el.value = this._config[configVal] || "radiatory";
-        el.addEventListener('closed', (ev) => ev.stopPropagation());
-        el.addEventListener('selected', (ev) => this.configChanged(ev));
-      }
+      el.value = this._config[configVal] || "";
+      el.addEventListener('input', (ev) => this.configChanged(ev));
     });
   }
 }

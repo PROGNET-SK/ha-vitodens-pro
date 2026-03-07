@@ -6,9 +6,8 @@
  * Lumina Design s plnou konfiguráciou Vitodens komponentov.
  */
 
-const LitElement = Object.getPrototypeOf(customElements.get("ha-panel-lovelace") || customElements.get("hc-lovelace"));
-const html = LitElement.prototype.html;
-const css = LitElement.prototype.css;
+// No longer using LitElement to avoid startup crashes if HA elements aren't ready
+
 
 // List form fields based on User Request
 const SENSORS = [
@@ -545,7 +544,8 @@ class HaVitodensProEditor extends HTMLElement {
     const target = ev.target;
     const configVal = target.getAttribute("configValue") || target.configValue;
     if (configVal) {
-      this._config = { ...this._config, [configVal]: target.value };
+      const value = (ev.detail && ev.detail.value !== undefined) ? ev.detail.value : target.value;
+      this._config = { ...this._config, [configVal]: value };
       window.dispatchEvent(
         new CustomEvent("config-changed", {
           detail: { config: this._config },
@@ -582,7 +582,9 @@ class HaVitodensProEditor extends HTMLElement {
                 ha-entity-picker { flex: 2; }
                 .group { margin-bottom: 20px; border: 1px solid #444; padding: 10px; border-radius: 5px; color: white; }
                 .group h3 { margin-top: 0; }
-                select { background: #333; color: white; padding: 5px; border-radius: 4px; border: 1px solid #555; }
+                ha-select { width: 100%; }
+                .row { display: flex; flex-direction: column; align-items: stretch; gap: 4px; margin-bottom: 16px; }
+                .row-select { margin-bottom: 20px; }
             </style>
             
             <div class="group">
@@ -610,12 +612,17 @@ class HaVitodensProEditor extends HTMLElement {
                 ${[1, 2, 3, 4, 5].map(i => `
                     <div style="border-bottom:1px solid #555; margin-bottom:10px; padding-bottom:5px;">
                         <h4>Okruh ${i}</h4>
-                        <div class="row">Typ: 
-                            <select configValue="circuit_${i}_type">
-                                <option value="podlaha">Podlaha</option>
-                                <option value="radiatory">Radiátory</option>
-                                <option value="stropne">Stropné (Kúrenie/Chladenie)</option>
-                            </select>
+                        <div class="row row-select">
+                            <ha-select
+                                label="Typ okruhu ${i}"
+                                configValue="circuit_${i}_type"
+                                fixedMenuPosition
+                                naturalMenuWidth
+                            >
+                                <ha-list-item value="podlaha">Podlaha</ha-list-item>
+                                <ha-list-item value="radiatory">Radiátory</ha-list-item>
+                                <ha-list-item value="stropne">Stropné (Kúrenie/Chladenie)</ha-list-item>
+                            </ha-select>
                         </div>
                         ${generatePicker(`Aktuálna teplota Okruh ${i}`, `circuit_${i}_temp`)}
                         ${generatePicker(`Žiadaná teplota Okruh ${i}`, `circuit_${i}_target`)}
@@ -632,7 +639,7 @@ class HaVitodensProEditor extends HTMLElement {
     this.shadowRoot.innerHTML = template;
 
     // Manual binding after render for vanilla JS
-    this.shadowRoot.querySelectorAll("ha-entity-picker, ha-textfield, select").forEach(el => {
+    this.shadowRoot.querySelectorAll("ha-entity-picker, ha-textfield, ha-select").forEach(el => {
       const configVal = el.getAttribute("configValue");
       if (el.tagName === 'HA-ENTITY-PICKER') {
         el.hass = this.hass;
@@ -641,9 +648,10 @@ class HaVitodensProEditor extends HTMLElement {
       } else if (el.tagName === 'HA-TEXTFIELD') {
         el.value = this._config[configVal] || "";
         el.addEventListener('input', (ev) => this.configChanged(ev));
-      } else if (el.tagName === 'SELECT') {
+      } else if (el.tagName === 'HA-SELECT') {
         el.value = this._config[configVal] || "radiatory";
-        el.addEventListener('change', (ev) => this.configChanged(ev));
+        el.addEventListener('closed', (ev) => ev.stopPropagation());
+        el.addEventListener('selected', (ev) => this.configChanged(ev));
       }
     });
   }

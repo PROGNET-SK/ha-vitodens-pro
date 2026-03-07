@@ -10,13 +10,23 @@
 
 // Helper to load HA elements if they're missing
 const loadHAElements = async () => {
-  if (!customElements.get("ha-entity-picker")) {
+  if (customElements.get("ha-entity-picker")) return;
+
+  // Try multiple ways to trigger HA element loading
+  try {
     const helpers = await (window).loadCardHelpers();
-    const gui = await helpers.createCardElement({ type: "entities", entities: [] });
-    // This forces HA to load the internal elements
+    if (helpers) {
+      const gui = await helpers.createCardElement({ type: "entities", entities: [] });
+      if (gui && typeof gui.constructor === 'function') {
+        // This usually triggers the registration
+      }
+    }
+  } catch (e) {
+    console.error("Failed to load HA helpers", e);
   }
 };
 loadHAElements();
+
 
 
 // List form fields based on User Request
@@ -574,11 +584,14 @@ class HaVitodensProEditor extends HTMLElement {
             <div class="mapping-row">
                 <div class="mapping-title">${label}</div>
                 <div class="mapping-inputs">
-                    <ha-entity-picker
-                        configValue="${id}"
-                        label="Vybrať entitu (Entity ID)"
-                        allow-custom-entity
-                    ></ha-entity-picker>
+                    <div class="picker-container">
+                        <ha-entity-picker
+                            configValue="${id}"
+                            label="Entita ID (napr. sensor.teplota)"
+                            allow-custom-entity
+                            fixedMenuPosition
+                        ></ha-entity-picker>
+                    </div>
                     <ha-textfield
                         label="Vlastný názov (voliteľné)"
                         configValue="${id}_name"
@@ -679,7 +692,19 @@ class HaVitodensProEditor extends HTMLElement {
                     --mdc-text-field-fill-color: rgba(255,255,255,0.03);
                     --mdc-text-field-ink-color: #fff;
                     --mdc-text-field-label-ink-color: #aaa;
+                    display: block;
+                    width: 100%;
                 }
+                ha-entity-picker {
+                    min-height: 56px;
+                    margin-bottom: 4px;
+                }
+                .picker-container {
+                    position: relative;
+                    min-height: 56px;
+                    width: 100%;
+                }
+
 
                 .row-select { margin-top: 5px; }
             </style>
@@ -737,16 +762,22 @@ class HaVitodensProEditor extends HTMLElement {
                                     </ha-select>
                                 </div>
                                 <div class="mapping-inputs">
-                                    <ha-entity-picker
-                                        configValue="circuit_${i}_temp"
-                                        label="Aktuálna teplota"
-                                        allow-custom-entity
-                                    ></ha-entity-picker>
-                                    <ha-entity-picker
-                                        configValue="circuit_${i}_target"
-                                        label="Žiadaná teplota"
-                                        allow-custom-entity
-                                    ></ha-entity-picker>
+                                    <div class="picker-container">
+                                        <ha-entity-picker
+                                            configValue="circuit_${i}_temp"
+                                            label="Aktuálna teplota"
+                                            allow-custom-entity
+                                            fixedMenuPosition
+                                        ></ha-entity-picker>
+                                    </div>
+                                    <div class="picker-container">
+                                        <ha-entity-picker
+                                            configValue="circuit_${i}_target"
+                                            label="Žiadaná teplota"
+                                            allow-custom-entity
+                                            fixedMenuPosition
+                                        ></ha-entity-picker>
+                                    </div>
                                 </div>
                             </div>
                         `).join('')}
@@ -768,9 +799,11 @@ class HaVitodensProEditor extends HTMLElement {
     this.shadowRoot.querySelectorAll("ha-entity-picker, ha-textfield, ha-select").forEach(el => {
       const configVal = el.getAttribute("configValue");
       if (el.tagName === 'HA-ENTITY-PICKER') {
-        el.hass = this.hass;
+        if (this.hass) el.hass = this.hass;
         el.value = this._config[configVal] || "";
         el.addEventListener('value-changed', (ev) => this.configChanged(ev));
+        // Force refresh
+        setTimeout(() => { if (this.hass) el.hass = this.hass; }, 100);
       } else if (el.tagName === 'HA-TEXTFIELD') {
         el.value = this._config[configVal] || "";
         el.addEventListener('input', (ev) => this.configChanged(ev));

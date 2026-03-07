@@ -8,6 +8,16 @@
 
 // No longer using LitElement to avoid startup crashes if HA elements aren't ready
 
+// Helper to load HA elements if they're missing
+const loadHAElements = async () => {
+  if (!customElements.get("ha-entity-picker")) {
+    const helpers = await (window).loadCardHelpers();
+    const gui = await helpers.createCardElement({ type: "entities", entities: [] });
+    // This forces HA to load the internal elements
+  }
+};
+loadHAElements();
+
 
 // List form fields based on User Request
 const SENSORS = [
@@ -529,7 +539,8 @@ class HaVitodensProEditor extends HTMLElement {
   set hass(hass) {
     this._hass = hass;
     if (this.shadowRoot) {
-      this.shadowRoot.querySelectorAll("ha-entity-picker").forEach(el => {
+      const pickers = this.shadowRoot.querySelectorAll("ha-entity-picker");
+      pickers.forEach(el => {
         el.hass = hass;
       });
     }

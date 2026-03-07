@@ -560,13 +560,14 @@ class HaVitodensProEditor extends HTMLElement {
     if (!this.shadowRoot) return;
 
     const generatePicker = (label, id) => `
-            <div class="row">
-                <ha-entity-picker
-                    configValue="${id}"
-                    label="${label}"
-                    allow-custom-entity
-                ></ha-entity-picker>
-                <div class="label-input">
+            <div class="mapping-row">
+                <div class="mapping-title">${label}</div>
+                <div class="mapping-inputs">
+                    <ha-entity-picker
+                        configValue="${id}"
+                        label="Vybrať entitu (Entity ID)"
+                        allow-custom-entity
+                    ></ha-entity-picker>
                     <ha-textfield
                         label="Vlastný názov (voliteľné)"
                         configValue="${id}_name"
@@ -577,62 +578,176 @@ class HaVitodensProEditor extends HTMLElement {
 
     const template = `
             <style>
-                .row { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
-                .label-input { flex: 1; }
-                ha-entity-picker { flex: 2; }
-                .group { margin-bottom: 20px; border: 1px solid #444; padding: 10px; border-radius: 5px; color: white; }
-                .group h3 { margin-top: 0; }
-                ha-select { width: 100%; }
-                .row { display: flex; flex-direction: column; align-items: stretch; gap: 4px; margin-bottom: 16px; }
-                .row-select { margin-bottom: 20px; }
+                :host {
+                    --lumina-cyan: #00ffd5;
+                    --lumina-glow: rgba(0, 255, 213, 0.4);
+                }
+                .card-config {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 12px;
+                    padding: 8px;
+                    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                }
+                .editor-header {
+                    padding: 16px;
+                    background: linear-gradient(90deg, #111, #222);
+                    border-radius: 12px;
+                    border: 1px solid #333;
+                    margin-bottom: 8px;
+                    border-left: 4px solid var(--lumina-cyan);
+                    box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+                }
+                .editor-header h2 { margin: 0; font-size: 1.1rem; color: #fff; }
+                .editor-header p { margin: 5px 0 0; font-size: 0.8rem; color: #aaa; }
+
+                details.section {
+                    border: 1px solid rgba(255, 255, 255, 0.1);
+                    border-radius: 12px;
+                    background: rgba(255, 255, 255, 0.03);
+                    overflow: hidden;
+                    margin-bottom: 8px;
+                    transition: all 0.3s ease;
+                }
+                details.section[open] {
+                    background: rgba(255, 255, 255, 0.05);
+                    border-color: rgba(0, 255, 213, 0.3);
+                    box-shadow: 0 0 15px rgba(0, 255, 213, 0.05);
+                }
+                .section-summary {
+                    font-weight: bold;
+                    font-size: 0.95rem;
+                    padding: 14px 16px;
+                    background: rgba(255,255,255,0.05);
+                    color: #fff;
+                    cursor: pointer;
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    list-style: none;
+                    user-select: none;
+                }
+                .section-summary:hover { background: rgba(255,255,255,0.08); }
+                .section-summary::-webkit-details-marker { display: none; }
+                .section-summary::after {
+                    content: '\u25BC';
+                    font-size: 0.8rem;
+                    transition: transform 0.3s ease;
+                    color: var(--lumina-cyan);
+                }
+                details.section[open] .section-summary::after { transform: rotate(180deg); }
+
+                .section-content { padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+
+                .mapping-row {
+                    background: rgba(0,0,0,0.2);
+                    border-radius: 10px;
+                    padding: 12px;
+                    border: 1px solid rgba(255,255,255,0.05);
+                    display: flex;
+                    flex-direction: column;
+                    gap: 10px;
+                }
+                .mapping-title {
+                    font-size: 0.85rem;
+                    font-weight: 600;
+                    color: var(--lumina-cyan);
+                    letter-spacing: 0.5px;
+                }
+                .mapping-inputs {
+                    display: grid;
+                    grid-template-columns: 1fr 1fr;
+                    gap: 10px;
+                }
+                @media (max-width: 500px) {
+                    .mapping-inputs { grid-template-columns: 1fr; }
+                }
+
+                ha-entity-picker, ha-textfield, ha-select {
+                    --mdc-theme-primary: var(--lumina-cyan);
+                    --mdc-text-field-fill-color: rgba(255,255,255,0.03);
+                    --mdc-text-field-ink-color: #fff;
+                    --mdc-text-field-label-ink-color: #aaa;
+                }
+
+                .row-select { margin-top: 5px; }
             </style>
             
-            <div class="group">
-                <h3>Hlavný kotol</h3>
-                ${generatePicker("Stav kotla (Entity)", "boiler_state")}
-            </div>
+            <div class="card-config">
+                <div class="editor-header">
+                    <h2>HA Vitodens Pro</h2>
+                    <p>Konfigurácia karty a mapovanie dátových bodov</p>
+                </div>
 
-            <div class="group">
-                <h3>Čidlá (Energia, teploty, spotreba)</h3>
-                ${SENSORS.map(s => generatePicker(s.name, s.id)).join('')}
-            </div>
-
-            <div class="group">
-                <h3>Ovládanie a nastavenia</h3>
-                ${CONTROLS.map(c => generatePicker(c.name, c.id)).join('')}
-            </div>
-
-            <div class="group">
-                <h3>Diagnostika</h3>
-                ${DIAGNOSTICS.map(d => generatePicker(d.name, d.id)).join('')}
-            </div>
-
-            <div class="group">
-                <h3>Okruhy (Max 5)</h3>
-                ${[1, 2, 3, 4, 5].map(i => `
-                    <div style="border-bottom:1px solid #555; margin-bottom:10px; padding-bottom:5px;">
-                        <h4>Okruh ${i}</h4>
-                        <div class="row row-select">
-                            <ha-select
-                                label="Typ okruhu ${i}"
-                                configValue="circuit_${i}_type"
-                                fixedMenuPosition
-                                naturalMenuWidth
-                            >
-                                <ha-list-item value="podlaha">Podlaha</ha-list-item>
-                                <ha-list-item value="radiatory">Radiátory</ha-list-item>
-                                <ha-list-item value="stropne">Stropné (Kúrenie/Chladenie)</ha-list-item>
-                            </ha-select>
-                        </div>
-                        ${generatePicker(`Aktuálna teplota Okruh ${i}`, `circuit_${i}_temp`)}
-                        ${generatePicker(`Žiadaná teplota Okruh ${i}`, `circuit_${i}_target`)}
+                <details class="section" open>
+                    <summary class="section-summary">Hlavný kotol</summary>
+                    <div class="section-content">
+                        ${generatePicker("Stav kotla", "boiler_state")}
                     </div>
-                `).join('')}
-            </div>
-            
-            <div class="group">
-                <h3>Radiátory samostatne (Max 5)</h3>
-                ${[1, 2, 3, 4, 5].map(i => generatePicker(`Teplota Radiátor ${i}`, `radiator_${i}_temp`)).join('')}
+                </details>
+
+                <details class="section">
+                    <summary class="section-summary">Čidlá (Energia, teploty, spotreba)</summary>
+                    <div class="section-content">
+                        ${SENSORS.map(s => generatePicker(s.name, s.id)).join('')}
+                    </div>
+                </details>
+
+                <details class="section">
+                    <summary class="section-summary">Ovládanie a nastavenia</summary>
+                    <div class="section-content">
+                        ${CONTROLS.map(c => generatePicker(c.name, c.id)).join('')}
+                    </div>
+                </details>
+
+                <details class="section">
+                    <summary class="section-summary">Diagnostika</summary>
+                    <div class="section-content">
+                        ${DIAGNOSTICS.map(d => generatePicker(d.name, d.id)).join('')}
+                    </div>
+                </details>
+
+                <details class="section">
+                    <summary class="section-summary">Okruhy (Max 5)</summary>
+                    <div class="section-content">
+                        ${[1, 2, 3, 4, 5].map(i => `
+                            <div class="mapping-row">
+                                <div class="mapping-title">Okruh ${i}</div>
+                                <div class="row-select">
+                                    <ha-select
+                                        label="Typ okruhu"
+                                        configValue="circuit_${i}_type"
+                                        fixedMenuPosition
+                                        naturalMenuWidth
+                                    >
+                                        <ha-list-item value="podlaha">Podlaha</ha-list-item>
+                                        <ha-list-item value="radiatory">Radiátory</ha-list-item>
+                                        <ha-list-item value="stropne">Stropné (Kúrenie/Chladenie)</ha-list-item>
+                                    </ha-select>
+                                </div>
+                                <div class="mapping-inputs">
+                                    <ha-entity-picker
+                                        configValue="circuit_${i}_temp"
+                                        label="Aktuálna teplota"
+                                        allow-custom-entity
+                                    ></ha-entity-picker>
+                                    <ha-entity-picker
+                                        configValue="circuit_${i}_target"
+                                        label="Žiadaná teplota"
+                                        allow-custom-entity
+                                    ></ha-entity-picker>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </details>
+
+                <details class="section">
+                    <summary class="section-summary">Radiátory samostatne (Max 5)</summary>
+                    <div class="section-content">
+                        ${[1, 2, 3, 4, 5].map(i => generatePicker(`Radiátor ${i}`, `radiator_${i}_temp`)).join('')}
+                    </div>
+                </details>
             </div>
         `;
 
